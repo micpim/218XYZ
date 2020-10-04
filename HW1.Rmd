@@ -1,0 +1,148 @@
+---
+title: "Michael Pimentel - Assignment1"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = F,include = F)
+```
+
+```{r Libraries, include = F}
+library(tidyverse)
+library(plotly)
+library(sf)
+library(tigris)
+library(leaflet)
+```
+
+September 22,2020
+
+1. Create bar or line charts showing monthly total kBTUs of residential and commercial electricity and gas consumption for the Bay Area (meaning the sum of all ZIP codes in the 9 Bay Area counties) from 2017 to the latest available month (meaning a 42-column version of the plots from section 1.8). Look online for the correct conversion of kWhs to kBTUs and therms to kBTUs. Make sure that electricity and gas data are distinguishable but plotted in the same chart; feel free to separate your analyses for residential and commercial into two separate charts if you believe it improves legibility, or do one chart with 4 colors in the legend
+
+
+##kBTU Bar Graph depecting electricy and gas use in the bay for the last 3 yars
+
+
+```{r Bar graph, echo=FALSE}
+setwd("~/Desktop/Working_Directory/BayArea/HW1")
+year <- 2017
+quarters <- 1:14
+type <- "Gas"
+
+pge_gas <- NULL
+quarter = 1
+
+for(run  in quarters) {
+  if ((run == 5) | (run == 9) | (run == 13)){
+    year = year + 1
+    quarter = quarter - 4
+  }
+  if ((quarter == 3) & (year == 2020)){
+    break
+  }
+
+  filename <-
+    paste0(
+      "PGE_",
+      year,
+      "_Q",
+      quarter,
+      "_",
+      type,
+      "UsageByZip.csv"
+    )
+  print(filename)
+
+  temp <- read_csv(filename)
+
+  pge_gas <- rbind(pge_gas,temp)
+  quarter = quarter + 1
+}
+year <- 2017
+quarters <- 1:14
+type <- "Electric"
+
+pge_electric <- NULL
+quarter = 1
+
+for(run  in quarters) {
+  if ((run == 5) | (run == 9) | (run == 13)){
+    year = year + 1
+    quarter = quarter - 4
+  }
+  if ((quarter == 3) & (year == 2020)){
+    break
+  }
+
+  filename <-
+    paste0(
+      "PGE_",
+      year,
+      "_Q",
+      quarter,
+      "_",
+      type,
+      "UsageByZip.csv"
+    )
+  temp <- read_csv(filename)
+
+  pge_electric <- rbind(pge_electric,temp)
+  quarter = quarter + 1
+}
+
+pge_filter_elec <- filter(pge_electric, CUSTOMERCLASS %in% c("Elec- Residential","Elec- Commercial"))
+pge_filter_gas <- filter(pge_gas, CUSTOMERCLASS %in% c("Gas- Residential","Gas- Commercial"))
+
+pge_select_elec <- mutate(pge_filter_elec, MONTH = MONTH + (12*(YEAR - 2017)) )
+pge_select_gas <- mutate(pge_filter_gas, MONTH = MONTH + (12*(YEAR - 2017)) )
+pge_select_elec <-select(pge_select_elec  ,!c( COMBINED, AVERAGEKWH))
+pge_select_gas <-select(pge_select_gas ,!c( COMBINED, AVERAGETHM))
+rm(pge_filter_elec, pge_filter_gas)
+
+pge_group_elec <- group_by( pge_select_elec, MONTH, CUSTOMERCLASS, YEAR)
+pge_group_gas <- group_by( pge_select_gas, MONTH, CUSTOMERCLASS, YEAR)
+rm(pge_select_elec,pge_select_gas)
+
+pge_summarize_elec <- summarize( pge_group_elec, TOTALKWH = sum( TOTALKWH, na.rm = T),
+                                 TOTALCUSTOMERS = sum(TOTALCUSTOMERS, na.rm = T))
+pge_summarize_gas <- summarize( pge_group_gas, TOTALTHM = sum( TOTALTHM, na.rm = T),
+                                TOTALCUSTOMERS = sum(TOTALCUSTOMERS, na.rm = T))
+
+
+rm(pge_group_elec,pge_group_gas)
+
+pge_mutate_elec <- mutate(pge_summarize_elec, AVERAGEkBTU = (TOTALKWH * 3412.14 ) /TOTALCUSTOMERS)
+pge_mutate_gas  <- mutate(pge_summarize_gas , AVERAGEkBTU = (TOTALTHM * 99976.1 )/TOTALCUSTOMERS)
+
+rm(pge_summarize_elec,pge_summarize_gas)
+
+pgeELECT <-select(pge_mutate_elec  ,-TOTALKWH)
+pgeGAS <-select(pge_mutate_gas  , -TOTALTHM )
+pge_final<- rbind(pgeELECT,pgeGAS)
+rm(pge_mutate_elec,pge_mutate_gas,pgeELECT,pgeGAS)
+
+pge_chart <-
+  pge_final %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = MONTH %>% factor(),
+      y = AVERAGEkBTU,
+      fill = CUSTOMERCLASS
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "Months Starting Jan 2017",
+    y = "kBTU",
+    title = "PG&E Territory Monthly Electricity and Gas Usage, 2017-Present",
+    fill = "Electricity Type"
+  )
+plot(pge_chart)
+
+```
+
